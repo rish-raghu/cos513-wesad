@@ -1,0 +1,23 @@
+python src/train.py -w 512 --lr 1e-4 --log 5000 -o w512
+python src/eval.py w512/weights_latest.pt -w 512 --log 5000 -o w512
+
+python src/train.py -w 512 --lr 1e-4 --log 5000 -o s2_allfeats_w512
+python src/eval.py s2_allfeats_w512/weights_best.pt -w 512 --log 5000 -o s2_allfeats_w512
+
+python src/train.py S2 -w 512 --lr 1e-4 --log 5000 -o s2_allfeats_w512_norm
+python src/eval.py s2_allfeats_w512_norm/weights_best.pt S2 -w 512 --log 5000 -o s2_allfeats_w512_norm/s2
+python src/eval.py s2_allfeats_w512_norm/weights_best.pt S3 -w 512 --log 5000 -o s2_allfeats_w512_norm/s3
+python src/ari.py s2_allfeats_w512_norm/s2_mu.npy s2_allfeats_w512_norm/s2_label.npy
+
+sbatch -p cryoem -t 2:00:00 --mem=64G --gres=gpu:1 -J wesad --wrap "python src/train.py S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 -w 512 --lr 1e-4 --log 5000 -i 500000 -o s2-11_allfeats_w512"
+python src/eval.py s2-11_allfeats_w512/weights_best.pt S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 -w 512 --log 5000 -o s2-11_allfeats_w512/s2-11
+python src/eval.py s2-11_allfeats_w512/weights_best.pt S13 S14 S15 S16 S17 -w 512 --log 5000 -o s2-11_allfeats_w512/s13-17
+// python src/ari.py s2-11_allfeats_w512/s2-11_mu.npy s2-11_allfeats_w512/s2-11_label.npy
+python src/classify.py s2-11_allfeats_w512/s2-11_mu.npy s2-11_allfeats_w512/s2-11_label.npy s2-11_allfeats_w512/s13-17_mu.npy s2-11_allfeats_w512/s13-17_label.npy
+
+sbatch -p cryoem -t 2:00:00 --mem=64G --gres=gpu:1 -J wesad --wrap "python src/train.py S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 -w 512 --lr 1e-4 -z 256 --log 5000 -i 500000 -o s2-11_w512_z256"
+for z in 128 256; do
+    sbatch -p cryoem -t 0:10:00 --mem=32G --gres=gpu:1 -J wesad --wrap "python src/eval.py s2-11_w512_z${z}/weights_best.pt S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 -w 512 -z ${z} -o s2-11_w512_z${z}/s2-11"
+    sbatch -p cryoem -t 0:10:00 --mem=32G --gres=gpu:1 -J wesad --wrap "python src/eval.py s2-11_w512_z${z}/weights_best.pt S13 S14 S15 S16 S17 -w 512 -z ${z} -o s2-11_w512_z${z}/s13-17"
+done
+z=256; python src/classify.py s2-11_w512_z${z}/s2-11_mu.npy s2-11_w512_z${z}/s2-11_label.npy s2-11_w512_z${z}/s13-17_mu.npy s2-11_w512_z${z}/s13-17_label.npy

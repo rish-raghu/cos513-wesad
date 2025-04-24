@@ -13,7 +13,7 @@ def loss_fn(input, output, mu, logvar):
 
 def train(args, train_loader, device):
     n_feats = args.w * len(ATTRIBUTES)
-    model = VAE_MLP(n_feats, 2, 256, 16, 2, 256).to(device)
+    model = VAE_MLP(n_feats, 2, 256, args.z, 2, 256).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.train()
@@ -33,7 +33,7 @@ def train(args, train_loader, device):
             if train_loss < best_loss:
                 best_loss = train_loss
                 torch.save(model.state_dict(), os.path.join(args.o, "weights_best.pt"))
-            print(f"Iter {iters}: Loss {loss.item()}")
+            print(f"Iter {iters}: Loss {loss.item()}", flush=True)
             train_loss = 0
         iters +=1
         if iters >= args.i: break
@@ -42,16 +42,18 @@ def train(args, train_loader, device):
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('subject_ids', nargs="+")
     parser.add_argument('--csv', default="/scratch/gpfs/jl8975/jlanglieb/13_wesad/WESAD/ALL_FROMPKL.csv.gz")
     parser.add_argument('-w', type=int, default=128, help='Window size')
     parser.add_argument('-b', type=int, default=32, help='Batch size')
     parser.add_argument('-i', type=int, default=100000, help='Number of iterations')
     parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('-z', type=int, default=16, help="Latent dim")
     parser.add_argument('--log', type=int, default=1000, help='Log loss every x iterations')
     parser.add_argument('-o', required=True)
     args = parser.parse_args()
 
-    dataset = TimeSeriesDataset(args.csv, args.w)
+    dataset = TimeSeriesDataset(args.csv, args.subject_ids, args.w)
     train_loader = DataLoader(dataset, batch_size=args.b, shuffle=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
