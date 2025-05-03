@@ -6,10 +6,10 @@ from model import VAE_MLP
 from dataset import ATTRIBUTES
 import os
 
-def loss_fn(input, output, mu, logvar):
+def loss_fn(input, output):#, mu, logvar):
     mse = torch.nn.functional.mse_loss(input, output)
-    kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return mse + kld
+    #kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    return mse #+ kld
 
 def train(args, train_loader, device):
     n_feats = args.w * len(ATTRIBUTES)
@@ -22,8 +22,10 @@ def train(args, train_loader, device):
     for batch_idx, (data, _) in enumerate(train_loader):
         data = data.to(device)
         optimizer.zero_grad()
-        recon, mu, logvar = model(data)
-        loss = loss_fn(data.view(-1, n_feats), recon.view(-1, n_feats), mu, logvar)
+        # recon, mu, logvar = model(data)
+        # loss = loss_fn(data.view(-1, n_feats), recon.view(-1, n_feats), mu, logvar)
+        recon, mu = model(data)
+        loss = loss_fn(data.view(-1, n_feats), recon.view(-1, n_feats))
         loss.backward()
         train_loss += loss.item() / args.log
         optimizer.step()
