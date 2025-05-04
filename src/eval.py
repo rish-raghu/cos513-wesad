@@ -4,9 +4,11 @@ import numpy as np
 import argparse
 from dataset import TimeSeriesDataset
 from dataset import ATTRIBUTES
-from model import VAE_MLP
+from model import VAE_MLP, TimeVAE
 from train import loss_fn
 import os
+
+MODEL_TYPE="time"
 
 def eval(args, model, test_loader, device):
     model.eval()
@@ -37,6 +39,7 @@ if __name__=="__main__":
     parser.add_argument('-w', type=int, default=128, help='Window size')
     parser.add_argument('-b', type=int, default=32, help='Batch size')
     parser.add_argument('-z', type=int, default=16)
+    parser.add_argument('-p', type=int, default=None)
     #parser.add_argument('--log', type=int, default=1000, help='Log loss every x iterations')
     parser.add_argument('-o', required=True)
     args = parser.parse_args()
@@ -45,7 +48,10 @@ if __name__=="__main__":
     test_loader = DataLoader(dataset, batch_size=args.b, shuffle=False)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     n_feats = args.w * len(ATTRIBUTES)
-    model = VAE_MLP(n_feats, 2, 256, args.z, 2, 256).to(device)
+    if MODEL_TYPE=="base":
+        model = VAE_MLP(n_feats, 2, 256, args.z, 2, 256).to(device)
+    elif MODEL_TYPE=="time":
+        model = TimeVAE(args.w, len(ATTRIBUTES), 3, 256, 3, args.z, 3, 256, args.p).to(device)
     model.load_state_dict(torch.load(args.weights, weights_only=True))
 
     mus, logvars, labels = eval(args, model, test_loader, device)

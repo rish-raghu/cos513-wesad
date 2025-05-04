@@ -2,9 +2,11 @@ import torch
 from torch.utils.data import DataLoader
 import argparse
 from dataset import TimeSeriesDataset
-from model import VAE_MLP
+from model import VAE_MLP, TimeVAE
 from dataset import ATTRIBUTES
 import os
+
+MODEL_TYPE="time"
 
 def loss_fn(input, output, mu, logvar):
     mse = torch.nn.functional.mse_loss(input, output)
@@ -13,7 +15,10 @@ def loss_fn(input, output, mu, logvar):
 
 def train(args, train_loader, device):
     n_feats = args.w * len(ATTRIBUTES)
-    model = VAE_MLP(n_feats, 2, 256, args.z, 2, 256).to(device)
+    if MODEL_TYPE=="base":
+        model = VAE_MLP(n_feats, 2, 256, args.z, 2, 256).to(device)
+    elif MODEL_TYPE=="time":
+        model = TimeVAE(args.w, len(ATTRIBUTES), 3, 256, 3, args.z, 3, 256, args.p).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.train()
@@ -51,6 +56,7 @@ if __name__=="__main__":
     parser.add_argument('-i', type=int, default=100000, help='Number of iterations')
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('-z', type=int, default=16, help="Latent dim")
+    parser.add_argument('-p', type=int, default=None, help='Poly trend degree')
     parser.add_argument('--log', type=int, default=1000, help='Log loss every x iterations')
     parser.add_argument('-o', required=True)
     args = parser.parse_args()
