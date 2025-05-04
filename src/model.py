@@ -14,7 +14,7 @@ class VAE_MLP(nn.Module):
             enc_layers.append(nn.Linear(enc_dim, enc_dim))
         self.enc_layers = nn.ModuleList(enc_layers)
         self.mu = nn.Linear(enc_dim, latent_dim)
-        #self.logvar = nn.Linear(enc_dim, latent_dim)
+        self.logvar = nn.Linear(enc_dim, latent_dim)
 
         # Decoder
         dec_layers = [nn.Linear(latent_dim, dec_dim)]
@@ -26,7 +26,7 @@ class VAE_MLP(nn.Module):
     def encode(self, x):
         for layer in self.enc_layers:
             x = F.relu(layer(x))
-        return self.mu(x)#, self.logvar(x)
+        return self.mu(x), self.logvar(x)
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -38,10 +38,12 @@ class VAE_MLP(nn.Module):
             z = F.relu(layer(z))
         return self.out(z)
 
-    # def forward(self, x):
-    #     mu, logvar = self.encode(x.view(-1, self.input_dim))
-    #     z = self.reparameterize(mu, logvar)
-    #     return self.decode(z), mu, logvar
     def forward(self, x):
-        z = self.encode(x.view(-1, self.input_dim))
-        return self.decode(z), z
+        mu, logvar = self.encode(x.view(-1, self.input_dim))
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z), mu, logvar
+    # def forward(self, x): # AE Only
+    #     z = self.encode(x.view(-1, self.input_dim))
+    #     return self.decode(z), z
+
+
