@@ -1,16 +1,15 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 class VAE_MLP(nn.Module):
-    def __init__(self, input_dim, n_enc_layers, enc_dim, latent_dim, n_dec_layers, dec_dim):
+    def __init__(self, input_dim, n_enc_layers, enc_dim, latent_dim, n_dec_layers, dec_dim, n_classes=8):
         super(VAE_MLP, self).__init__()
 
         # Encoder
         self.input_dim = input_dim
         enc_layers = [nn.Linear(input_dim, enc_dim)]
-        for _ in range(n_enc_layers-1):
+        for _ in range(n_enc_layers - 1):
             enc_layers.append(nn.Linear(enc_dim, enc_dim))
         self.enc_layers = nn.ModuleList(enc_layers)
         self.mu = nn.Linear(enc_dim, latent_dim)
@@ -18,10 +17,13 @@ class VAE_MLP(nn.Module):
 
         # Decoder
         dec_layers = [nn.Linear(latent_dim, dec_dim)]
-        for _ in range(n_dec_layers-1):
+        for _ in range(n_dec_layers - 1):
             dec_layers.append(nn.Linear(dec_dim, dec_dim))
         self.dec_layers = nn.ModuleList(dec_layers)
         self.out = nn.Linear(dec_dim, input_dim)
+
+        # Classification layer (Bayesian Logistic Regression approximation)
+        self.classifier = nn.Linear(latent_dim, n_classes)
 
     def encode(self, x):
         for layer in self.enc_layers:
@@ -41,9 +43,6 @@ class VAE_MLP(nn.Module):
     def forward(self, x):
         mu, logvar = self.encode(x.view(-1, self.input_dim))
         z = self.reparameterize(mu, logvar)
-        return self.decode(z), mu, logvar
-    # def forward(self, x): # AE Only
-    #     z = self.encode(x.view(-1, self.input_dim))
-    #     return self.decode(z), z
-
-
+        recon = self.decode(z)
+        logits = self.classifier(z)
+        return recon, mu, logvar, logits

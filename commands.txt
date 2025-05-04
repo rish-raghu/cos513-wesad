@@ -22,7 +22,7 @@ for z in 128 256; do
 done
 z=256; python src/classify.py s2-11_w512_z${z}/s2-11_mu.npy s2-11_w512_z${z}/s2-11_label.npy s2-11_w512_z${z}/s13-17_mu.npy s2-11_w512_z${z}/s13-17_label.npy
 
-sbatch -p cryoem -t 1:00:00 --mem=64G --gres=gpu:1 -J wesad --wrap "python src/train.py S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 -w 512 --lr 1e-4 -z 64 --log 5000 -i 500000 -o s2-11_w512_z64_aeonly"
-sbatch -p cryoem -t 0:10:00 --mem=32G --gres=gpu:1 -J wesad --wrap "python src/eval.py s2-11_w512_z64_aeonly/weights_best.pt S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 -w 512 -z 64 -o s2-11_w512_z64_aeonly/s2-11"
-sbatch -p cryoem -t 0:10:00 --mem=32G --gres=gpu:1 -J wesad --wrap "python src/eval.py s2-11_w512_z64_aeonly/weights_best.pt S13 S14 S15 S16 S17 -w 512 -z 64 -o s2-11_w512_z64_aeonly/s13-17"
+sbatch -p yh0068 -t 1:00:00 --mem=64G --gres=gpu:1 --partition=pli-c -J wesad --wrap "python src/train.py S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 -w 512 --lr 1e-4 -z 64 --log 5000 -i 500000 -o s2-11_w512_z64_aeonly"
+sbatch -p yh0068 -t 0:10:00 --mem=32G --gres=gpu:1 --partition=pli-c -J wesad --wrap "python src/eval.py s2-11_w512_z64_aeonly/weights_best.pt S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 -w 512 -z 64 -o s2-11_w512_z64_aeonly/s2-11"
+sbatch -p yh0068 -t 0:10:00 --mem=32G --gres=gpu:1 --partition=pli-c -J wesad --wrap "python src/eval.py s2-11_w512_z64_aeonly/weights_best.pt S13 S14 S15 S16 S17 -w 512 -z 64 -o s2-11_w512_z64_aeonly/s13-17"
 python src/classify.py s2-11_w512_z64_aeonly/s2-11_mu.npy s2-11_w512_z64_aeonly/s2-11_label.npy s2-11_w512_z64_aeonly/s13-17_mu.npy s2-11_w512_z64_aeonly/s13-17_label.npy
