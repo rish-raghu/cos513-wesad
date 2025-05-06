@@ -30,11 +30,44 @@ def model(x_data, y_data, num_classes):
         logits = (x_data @ w.T) + b
         pyro.sample("obs", dist.Categorical(logits=logits), obs=y_data)
 
-
+# Add this function to filter the dataset
+def filter_dataset(dataset):
+    # Get all labels
+    all_labels = []
+    for i in range(len(dataset)):
+        _, label = dataset[i]
+        all_labels.append(label)
+    
+    all_labels = torch.stack(all_labels)
+    # Create mask for labels 1-4
+    mask = (all_labels >= 1) & (all_labels <= 4)
+    mask = mask.any(dim=1)  # If any label in window is in range
+    
+    # Create filtered indices
+    indices = torch.where(mask)[0].tolist()
+    
+    # Create subset dataset
+    from torch.utils.data import Subset
+    filtered_dataset = Subset(dataset, indices)
+    
+    # Add labels attribute to the Subset for later use
+    filtered_dataset.labels = dataset.labels  # Original labels
+    
+    # You may also want to store the filtered max label
+    # Get unique labels from the filtered dataset
+    unique_labels = set()
+    for i in indices:
+        _, label = dataset[i]
+        unique_labels.update(label.unique().tolist())
+    filtered_dataset.max_label = max(unique_labels)
+    
+    return filtered_dataset
 
 def train(args):
     # --- prepare data ---
     dataset = TimeSeriesDataset(args.csv, args.subject_ids, args.window, stride=args.stride)
+    dataset = filter_dataset(dataset)
+    print(f"Filtered dataset size: {len(dataset)}")
     # loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
     loader = DataLoader(
         dataset,
@@ -51,6 +84,28 @@ def train(args):
     num_classes = int(dataset.labels.max().item() + 1)
     input_dim = args.window * len(ATTRIBUTES)
 
+    # Check if we should load a saved model
+    if hasattr(args, 'load_model') and args.load_model:
+        if not os.path.exists(args.load_model):
+            print(f"Error: Model file {args.load_model} not found!")
+            return None
+            
+        print(f"Loading model from {args.load_model}")
+        pyro.get_param_store().load(args.load_model)
+        
+        # Define wrapped model for the loaded parameters
+        def wrapped_model(x, y=None):
+            return model(x, y, num_classes)
+            
+        # For loaded models, we need to block the obs site
+        from pyro import poutine
+        blocked_model = poutine.block(wrapped_model, hide=["obs"])
+        guide = AutoDiagonalNormal(blocked_model)
+        guide.to(device)
+        
+        print("Model loaded successfully!")
+        return guide
+    
     # --- wrap model with lambda to bind args ---
     def wrapped_model(x, y):
         return model(x, y, num_classes)
@@ -96,6 +151,7 @@ def parse_args():
     p.add_argument("--lr",               type=float, default=1e-3)
     p.add_argument("-o", "--output_dir", required=True, help="Where to save checkpoints")
     p.add_argument("--ckpt_every",       type=int, default=5, help="Epoch interval to save guide")
+    p.add_argument("--load_model", help="Path to saved model to load instead of training")
     return p.parse_args()
 
 
@@ -116,4 +172,3 @@ if __name__ == "__main__":
     # # samples["obs"] has shape [num_samples, batch_size] with int class predictions
     # preds = samples["obs"].mode(0).values  # majority vote across posterior samples
     # print("Posterior class predictions:", preds)
-

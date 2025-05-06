@@ -14,10 +14,45 @@ from train_bayesian_logreg import model
 def majority_vote(labels):
     return torch.mode(labels, dim=1).values
 
+def filter_dataset(dataset):
+    # Get all labels
+    all_labels = []
+    for i in range(len(dataset)):
+        _, label = dataset[i]
+        all_labels.append(label)
+    
+    all_labels = torch.stack(all_labels)
+    # Create mask for labels 1-4
+    mask = (all_labels >= 1) & (all_labels <= 4)
+    mask = mask.any(dim=1)  # If any label in window is in range
+    
+    # Create filtered indices
+    indices = torch.where(mask)[0].tolist()
+    
+    # Create subset dataset
+    from torch.utils.data import Subset
+    filtered_dataset = Subset(dataset, indices)
+    
+    # Add labels attribute to the Subset for later use
+    filtered_dataset.labels = dataset.labels  # Original labels
+    
+    # You may also want to store the filtered max label
+    # Get unique labels from the filtered dataset
+    unique_labels = set()
+    for i in indices:
+        _, label = dataset[i]
+        unique_labels.update(label.unique().tolist())
+    filtered_dataset.max_label = max(unique_labels)
+    
+    return filtered_dataset
+
 
 def evaluate(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = TimeSeriesDataset(args.csv, args.subject_ids, args.window, stride=args.stride)
+    dataset = filter_dataset(dataset)
+    print(f"Filtered dataset size: {len(dataset)}")
+    
     if len(dataset) == 0:
         print(f"[!] No windows to evaluate for subjects={args.subject_ids} "
               f"with window={args.window}, stride={args.stride}.")
@@ -40,6 +75,7 @@ def evaluate(args):
     # Collect numpy arrays for each batch
     y_true_batches = []
     y_pred_batches = []
+    y_probs_batches = []
 
     for windows, labels in loader:
         B, W, C = windows.shape
@@ -63,6 +99,7 @@ def evaluate(args):
         # Store batch results as numpy arrays - ensure they are 1D
         y_true_batches.append(y.cpu().numpy().flatten())
         y_pred_batches.append(preds.cpu().numpy().flatten())
+        y_probs_batches.append(probs.cpu().numpy().flatten())
 
     # Print shape info for debugging
     print(f"Number of batches: {len(y_pred_batches)}")
@@ -72,13 +109,13 @@ def evaluate(args):
     # Concatenate all batches
     y_true = np.concatenate(y_true_batches)
     y_pred = np.concatenate(y_pred_batches)
-
+    y_probs = np.concatenate(y_probs_batches)
     print(f"Final predictions shape: {y_pred.shape}")
 
     os.makedirs(args.o, exist_ok=True)
     np.save(os.path.join(args.o, "y_true.npy"), y_true)
     np.save(os.path.join(args.o, "y_pred.npy"), y_pred)
-
+    np.save(os.path.join(args.o, "y_probs.npy"), y_probs)
     acc = (y_true == y_pred).mean()
     from sklearn.metrics import balanced_accuracy_score
     bacc = balanced_accuracy_score(y_true, y_pred)
