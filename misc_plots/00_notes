@@ -1,0 +1,3 @@
+conda create -n torch-env  python=3.12 conda-forge::mamba
+
+

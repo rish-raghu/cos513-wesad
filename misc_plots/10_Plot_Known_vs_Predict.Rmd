@@ -1,0 +1,635 @@
+---
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# QUESTION
+- Minkyu: eval for 2-11, only 13-17
+
+```{r}
+setwd("/scratch/gpfs/jl8975/jlanglieb/13_wesad/")
+library(ggplot2)
+library(ggridges)
+library(data.table)
+library(magrittr)
+library(dplyr)
+library(stringr)
+library(purrr)
+library(cowplot)
+# library(tidyr)
+
+V <- View
+
+clamp = function(lst, maxVal = Inf, minVal = -Inf){
+  lst[lst > maxVal] = maxVal
+  lst[lst < minVal] = minVal
+  lst
+}
+clampQ = function(lst, quant){
+  clamp(lst,
+        maxVal = quantile(lst, 1-quant),
+        minVal = quantile(lst, quant)
+  )
+}
+```
+
+```{r}
+
+FN = "/scratch/gpfs/jl8975/jlanglieb/13_wesad/01_Share/s2-11_w512_z64"
+# FN = "/scratch/gpfs/jl8975/jlanglieb/13_wesad/01_Share/s2-11_w512_z64_time0"
+# FN = "/scratch/gpfs/jl8975/jlanglieb/13_wesad/01_Share/s2-11_w512_z64_aeonly__yh0068/"
+
+
+# FN = "/scratch/gpfs/jl8975/jlanglieb/13_wesad/01_Share/01_FROM_Minkyu/cos513-wesad/s2-11_w512_bayes/eval_s13-17"
+
+train_test_label_pred = data.table::fread(glue::glue("{FN}/train_test_label_pred.csv"), fill=T) %>% as.matrix
+
+
+train_test_label_pred[c(3,6), ] %>% unlist %>% na.omit %>%
+  # {.[. < 8]} %>%
+  density %>% plot
+
+train_2dtable = table(train_test_label_pred[1,], train_test_label_pred[2,])
+
+if(stringr::str_detect(FN,  regex("minkyu", ignore_case = T))){
+  # mask = ((train_labels <= 4) & (train_labels > 0))
+  # train_labels = train_llabels[mask]
+  # train_labels -= 1
+  
+ # mask = ((test_labels <= 4) & (test_labels > 0))
+ # test_labels = test_llabels[mask]
+ # test_labels -= 1
+  # test_latents = np.load(args.test_latents)[mask]
+  
+  # mask = train_test_label_pred[3,] %>% {. <= 4 & . > 0}
+  # train_test_label_pred[3:4, ][, !mask] = NaN
+  # 
+  # mask = train_test_label_pred[1,] %>% {. <= 4 & . > 0}
+  # train_test_label_pred[1:2, ][, !mask] = NaN
+  # 
+  # train_test_label_pred %<>% {. - 1}
+  # 
+  # train_test_label_pred %>% table
+  
+  table(train_test_label_pred[3,], train_test_label_pred[4,])
+  
+  llabels <- c("0" = "Ignore0", "1" = "Baseline", "2" = "Stress", "3" = "Amusement", "4" = "Meditation", "5" = "Ignore5", "6" = "Ignore6", "7" = "Ignore7")
+  
+  
+}else{
+  # Rish
+  llabels <- c("0" = "Baseline", "1" = "Stress", "2" = "Amusement", "3" = "Meditation")
+}
+
+
+# labels <- c("0" = "Baseline", "1" = "Stress", "2" = "Amusement", "3" = "Meditation")
+# llabels_to_color = llabels %>% {set_names(RColorBrewer::brewer.pal(n=length(.), name="Set1"), .)}
+llabels_to_color = llabels %>% {set_names(pals::cols25(length(.)), .)}
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+llabels_to_color = llabels %>% {set_names(gg_color_hue(length(.)), .)}
+
+```
+
+
+```{r}
+
+
+# Create the heatmap using pipes
+
+p1 = list(Train = table(train_test_label_pred[1,] %>% na.omit(),
+                        train_test_label_pred[2,] %>% na.omit()),
+     Test =  table(train_test_label_pred[3,] %>% na.omit(),
+                   train_test_label_pred[4,] %>% na.omit())
+     ) %>%
+  imap(function(train_2dtable, nm){
+    # browser()
+    train_2dtable %>%
+      as.matrix %>% 
+      {round(100*./rowSums(.), 1)} %>% 
+      as.data.table() %>% 
+      setNames(c("Row", "Column", "Value")) %>% # rename columns
+      mutate(Row = factor(llabels[Row]),
+             Column = factor(llabels[Column])
+      ) %>% 
+      # within({
+      #   Row <- factor(Row, levels = c("0", "1", "2", "3"), labels = llabels[c("0", "1", "2", "3")])
+      #   Column <- factor(Column, levels = c("0", "1", "2", "3"), labels = llabels[c("0", "1", "2", "3")])
+      # }) %>%
+      ggplot(aes(Column, Row, fill = Value)) +
+      geom_tile() +
+      scale_fill_gradient(low = "white", high = "steelblue") +
+      # viridis::scale_fill_viridis()+
+      # geom_text(aes(label = format(Value, big.mark=",")), color = "black", size = 4) +
+      geom_text(aes(label = paste0(Value, "%")), color = "black", size = 4) +
+      theme_minimal() +
+      labs(title = glue::glue("{basename(FN)}\n{nm}"),
+           x = "Prediction",
+           y = "Truth") +
+       theme(aspect.ratio=1)+
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  }) %>% 
+  {cowplot::plot_grid(plotlist = ., nrow=1)}
+
+print(p1)
+
+h_d_w = 5.18/9.72
+width = 500*2
+
+png(glue::glue("{FN}/{basename(FN)}__p1.png"),
+    width = width, height = width * h_d_w,)
+print(p1)
+dev.off()
+
+```
+
+```{r}
+library(ggridges)
+
+# Create separate plots with ggridges showing confidence distributions
+p4_list = list(Train = train_test_label_pred[1:3,],
+               Test = train_test_label_pred[4:6,]
+     ) %>%
+  imap(function(x, nm){
+    # browser()
+
+    # Get valid columns
+    valid_cols <- which(!is.na(x[1,]))
+
+    # Extract data
+    true_values <- x[1, valid_cols]
+    pred_values <- x[2, valid_cols]
+    conf_values <- as.numeric(x[3, valid_cols])
+
+    # Create combined dataset
+    ridge_data <- data.frame(
+      true_state = factor(llabels[as.character(true_values)]),
+      pred_state = factor(llabels[as.character(pred_values)]),
+      confidence = conf_values,
+      is_correct = true_values == pred_values
+      # is_correct = ifelse(true_values == pred_values, "ZZCORRECT", paste0("F", true_values, "|", pred_values)) %>% factor
+    )
+
+    # threshVal = ridge_data$confidence %>% {max(.)*0.9}
+    # if(sum(ridge_data$confidence > threshVal) > 5){
+    #   print("Not removing outlier")
+    #   threshVal = 1000
+    # }
+    # clampVal = ridge_data$confidence %>% {.[. < threshVal]} %>% max
+    # # clampVal = 0.025
+    # ridge_data$confidence %<>% clamp(clampVal)
+
+    # Create ggridges plot
+    ggplot(ridge_data, aes(x = confidence, y = true_state, fill = is_correct)) +
+      geom_density_ridges(alpha = 0.7, scale = 0.9) +
+      # scale_fill_manual(values = c("FALSE" = "#FF7F7F", "TRUE" = "#7FBF7F"),
+      #                   name = "Prediction",
+      #                   labels = c("FALSE" = "Incorrect", "TRUE" = "Correct")) +
+      labs(title = glue::glue("{basename(FN)}\n{nm}: Confidence by State"),
+           x = "Confidence",
+           y = "True State") +
+      theme_ridges() +
+      theme(legend.position = "bottom") +
+      facet_wrap(~true_state, scales = "free")
+  })
+
+# Combine train and test plots for display
+p4 = gridExtra::grid.arrange(
+  p4_list$Train,
+  p4_list$Test,
+  ncol = 1
+)
+
+h_d_w = 5.18/9.72
+width = 500*2
+png(glue::glue("{FN}/{basename(FN)}__p4.png"),
+    width = width, height = width * h_d_w)
+plot(p4)
+dev.off()
+
+# # Create separate plots with ggridges showing confidence distributions
+# p4_list = list(Train = train_test_label_pred[1:3,],
+#                Test = train_test_label_pred[4:6,]
+#      ) %>%
+#   imap(function(x, nm){
+#     # Get valid columns
+#     valid_cols <- which(!is.na(x[1,]))
+#     
+#     # Extract data
+#     true_values <- x[1, valid_cols]
+#     pred_values <- x[2, valid_cols]
+#     conf_values <- as.numeric(x[3, valid_cols])
+#     
+#     # Create combined dataset
+#     ridge_data <- data.frame(
+#       true_state = factor(llabels[as.character(true_values)]),
+#       pred_state = factor(llabels[as.character(pred_values)]),
+#       confidence = conf_values,
+#       # is_correct = ifelse(true_values == pred_values, "ZZCORRECT", paste0(" ", llabels[as.character(true_values)], "|", llabels[as.character(pred_values)])) %>% factor
+#       is_correct = ifelse(true_values == pred_values, "ZZCORRECT", llabels[as.character(pred_values)]) %>% factor
+#     )
+#     
+#     threshVal = ridge_data$confidence %>% {max(.)*0.9}
+#     if(sum(ridge_data$confidence > threshVal) > 5){
+#       print("Not removing outlier")
+#       threshVal = 1000
+#     }
+#     clampVal = ridge_data$confidence %>% {.[. < threshVal]} %>% max
+#     ridge_data$confidence %<>% clamp(clampVal)
+#     
+#     # Get unique incorrect predictions for color mapping
+#     incorrect_levels <- levels(ridge_data$is_correct)[!grepl("ZZCORRECT", levels(ridge_data$is_correct))]
+#     
+#     # Create color palette for incorrect predictions
+#     incorrect_colors <- scales::hue_pal()(length(incorrect_levels)) %>% alpha(.4)
+#     
+#     # Create named vector for all fill colors
+#     fill_colors <- c("ZZCORRECT" = "black" %>% alpha(.2))
+#     names(incorrect_colors) <- incorrect_levels
+#     fill_colors <- c(fill_colors, incorrect_colors)
+#     
+#     # Create ggridges plot
+#     ggplot(ridge_data, aes(x = confidence, y = true_state, fill = is_correct, 
+#                           color = is_correct,
+#                           # alpha = ifelse(as.character(is_correct) == "ZZCORRECT", 0.4, 0.7)
+#                           )) +
+#       geom_density_ridges(
+#         aes(linewidth = is_correct == "ZZCORRECT"),
+#         scale = 0.9
+#       ) +
+#       scale_fill_manual(values = fill_colors, name = "Prediction Result") +
+#       scale_color_manual(values = fill_colors %>% alpha(1), name = "Prediction Result") +
+#       scale_linewidth_manual(values = c("TRUE" = .8, "FALSE" = 0.5), guide = "none") +
+#       labs(title = glue::glue("{basename(FN)}\n{nm}: Confidence by State"),
+#            x = "Confidence",
+#            y = "True State") +
+#       theme_ridges() +
+#       theme(legend.position = "bottom") +
+#       facet_wrap(~true_state, scales = "free")
+#   })
+# 
+# # Combine train and test plots for display
+# gridExtra::grid.arrange(
+#   p4_list$Train,
+#   p4_list$Test,
+#   ncol = 1
+# )
+
+```
+
+
+
+```{r}
+p3 = list(Train = table(train_test_label_pred[1,] %>% na.omit(),
+                        train_test_label_pred[2,] %>% na.omit()),
+     Test =  table(train_test_label_pred[3,] %>% na.omit(),
+                   train_test_label_pred[4,] %>% na.omit())
+     ) %>%
+  imap(function(train_2dtable, nm){
+    # browser()
+    
+    tmp = llabels_to_color
+    names(tmp) %<>% {paste0("0",.)}
+    tmp_llabels_to_color = c(
+      llabels_to_color,
+      tmp
+    )
+    
+    train_2dtable %>%
+      as.matrix %>%
+      reshape2::melt() %>% 
+      rename("Label"=Var1,
+             "Pred" =Var2) %>% 
+      mutate(Label = llabels[as.character(Label)],
+             Pred  = llabels[as.character(Pred)]) %>%
+      mutate(Pred = factor(paste0(ifelse(Label == Pred, "", "0"), Pred))) %>% 
+      # mutate(Pred = factor(Pred, levels = unique(c(as.character(Label), levels(Pred))))) %>% 
+      ggplot(aes(x=Label,
+                 group=Pred,
+                 fill=Pred,
+                 y=value))+
+      scale_fill_manual(values=tmp_llabels_to_color)+
+      geom_bar(stat="identity")+
+    
+      theme_minimal() +
+      labs(title = glue::glue("{basename(FN)}\n{nm}"),
+           # x = "Prediction",
+           # y = "Truth"
+           ) 
+       # theme(aspect.ratio=1)+
+      # theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  }) %>% 
+  {cowplot::plot_grid(plotlist = ., ncol=1)}
+
+png(glue::glue("{FN}/{basename(FN)}__p3.png"),
+    width = width, height = width * h_d_w,)
+print(p3)
+dev.off()
+```
+
+
+```{r}
+
+# Color with each class two colors -- correct, incorrect
+# and point plot
+{
+  library(ggplot2)
+library(dplyr)
+
+# Create two separate plots
+p3_list = list(Train = train_test_label_pred[1:3,],
+               Test = train_test_label_pred[4:6,]
+     ) %>%
+  imap(function(x, nm){
+    # Skip if data is empty or has issues
+    if(all(is.na(x[1,])) || ncol(x) == 0) {
+      return(list(
+        categorical = ggplot() + theme_void() + labs(title = "No data"),
+        confidence = ggplot() + theme_void() + labs(title = "No data")
+      ))
+    }
+    
+    # Get valid columns
+    valid_cols <- which(!is.na(x[1,]))
+    if(length(valid_cols) == 0) {
+      return(list(
+        categorical = ggplot() + theme_void() + labs(title = "No valid data"),
+        confidence = ggplot() + theme_void() + labs(title = "No valid data")
+      ))
+    }
+    
+    # Calculate strip width
+    strip_width <- ceiling(length(valid_cols) / 3)
+    
+    # Create a common dataset for faceting
+    common_data <- data.frame(
+      Var2 = valid_cols,
+      Strip = ceiling((1:length(valid_cols)) / strip_width)
+    )
+    
+    # Process categorical data (rows 1-2)
+    cat_values <- as.vector(t(x[1:2, valid_cols, drop=F]))
+    cat_data <- data.frame(
+      Var1 = rep(c("True", "Pred"), each = length(valid_cols)),
+      Var2 = rep(valid_cols, 2),
+      value = factor(llabels[as.character(cat_values)]),
+      X_within_strip = rep(((1:length(valid_cols)) - 1) %% strip_width + 1, 2)
+    ) %>%
+      left_join(common_data, by = "Var2") %>%
+      mutate(Var1 = factor(Var1, levels = c("True", "Pred", "Conf")))
+    
+    # Add empty row for Conf in categorical plot
+    empty_conf_row <- data.frame(
+      Var1 = rep("Conf", length(valid_cols)),
+      Var2 = valid_cols,
+      value = factor(1),  # Set to factor(1) as requested
+      X_within_strip = ((1:length(valid_cols)) - 1) %% strip_width + 1,
+      Strip = ceiling((1:length(valid_cols)) / strip_width)
+    ) %>%
+      mutate(Var1 = factor(Var1, levels = c("True", "Pred", "Conf")))
+    
+    cat_data_complete <- rbind(cat_data, empty_conf_row)
+    
+    conf_values <- as.vector(t(x[3, valid_cols, drop=F]))
+    clampVal = Inf
+    
+    # browser()
+    threshVal = conf_values %>% {max(.)*0.9}
+    if(sum(conf_values > threshVal) > 5){
+      browser()
+    }
+    clampVal = conf_values %>% {.[. < threshVal]} %>% max
+    
+    # threshVal = conf_values %>% {min(.)*1.1}
+    # if(sum(conf_values < threshVal) > 5){
+    #   browser()
+    # }
+    # clampVal = conf_values %>% {.[. > threshVal]} %>% min
+    
+    # browser()
+    # Process confidence data (row 3)
+    conf_data <- data.frame(
+      Var1 = rep("Conf", length(valid_cols)),
+      Var2 = valid_cols,
+      
+      # value = log10(as.numeric(conf_values)),
+      value = as.numeric(conf_values) %>% clamp(clampVal),
+      # value = as.numeric(conf_values) %>% clamp(minVal = clampVal),
+      
+      X_within_strip = ((1:length(valid_cols)) - 1) %% strip_width + 1
+    ) %>%
+      left_join(common_data, by = "Var2") %>%
+      mutate(Var1 = factor(Var1, levels = c("True", "Pred", "Conf")))
+    
+    # Add empty rows for True and Pred in confidence plot
+    empty_cat_rows <- data.frame(
+      Var1 = rep(c("True", "Pred"), each = length(valid_cols)),
+      Var2 = rep(valid_cols, 2),
+      value = NA,  # Set to NA as requested
+      X_within_strip = rep(((1:length(valid_cols)) - 1) %% strip_width + 1, 2),
+      Strip = rep(ceiling((1:length(valid_cols)) / strip_width), 2)
+    ) %>%
+      mutate(Var1 = factor(Var1, levels = c("True", "Pred", "Conf")))
+    
+    conf_data_complete <- rbind(empty_cat_rows, conf_data)
+    
+    # Create categorical plot
+    p_cat <- ggplot(cat_data_complete, aes(x = X_within_strip, y = Var1)) +
+      geom_tile(data = subset(cat_data_complete, Var1 %in% c("True", "Pred")), 
+                aes(fill = value)) +
+      # Empty space for Conf row
+      geom_tile(data = subset(cat_data_complete, Var1 == "Conf"), 
+                fill = "white", color = "lightgrey") +
+      # Add horizontal lines between rows
+      geom_segment(aes(x = 0.5, xend = strip_width + 0.5, y = 1.5, yend = 1.5), 
+                  color = "black", linewidth = .1, data = NULL) +
+      geom_segment(aes(x = 0.5, xend = strip_width + 0.5, y = 2.5, yend = 2.5), 
+                  color = "black", linewidth = .1, data = NULL) +
+      facet_wrap(~Strip, ncol = 1) +
+      scale_fill_discrete(name = "State") +
+      labs(title = glue::glue("{basename(FN)}\n{nm}: Categorical Data"),
+           x = "",
+           y = "") +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8),
+        strip.background = element_blank(), 
+        strip.text = element_blank(),
+        panel.grid = element_blank()
+      ) +
+      theme(legend.position = "none")
+      # theme(legend.position = ifelse(nm == "Test", "bottom", "none"))
+    
+    # Create confidence plot
+    p_conf <- ggplot(conf_data_complete, aes(x = X_within_strip, y = Var1)) +
+      # Empty spaces for True and Pred rows
+      geom_tile(data = subset(conf_data_complete, Var1 %in% c("True", "Pred")), 
+                fill = "white", color = "lightgrey") +
+      # Confidence row
+      geom_tile(data = subset(conf_data_complete, Var1 == "Conf"), 
+                aes(fill = value)) +
+      # Add horizontal lines between rows
+      geom_segment(aes(x = 0.5, xend = strip_width + 0.5, y = 1.5, yend = 1.5), 
+                  color = "black", linewidth = .1, data = NULL) +
+      geom_segment(aes(x = 0.5, xend = strip_width + 0.5, y = 2.5, yend = 2.5), 
+                  color = "black", linewidth = .1, data = NULL) +
+      facet_wrap(~Strip, ncol = 1) +
+      scale_fill_gradient(low = "white", high = "red", name = "Confidence") +
+      labs(title = glue::glue("{basename(FN)}\n{nm}: Confidence Data"),
+           x = "",
+           y = "") +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_text(size = 8),
+        strip.background = element_blank(), 
+        strip.text = element_blank(),
+        panel.grid = element_blank()
+      ) +
+      theme(legend.position = "none")
+      # theme(legend.position = ifelse(nm == "Test", "bottom", "none"))
+    
+    return(list(categorical = p_cat, confidence = p_conf))
+  })
+}
+```
+
+```{r}
+# {
+# p3_list$Train$confidence
+# }
+# Extract and arrange the categorical plots
+categorical_plots <- list(
+  Train = p3_list$Train$categorical,
+  Test = p3_list$Test$categorical
+)
+p_categorical <- cowplot::plot_grid(plotlist = categorical_plots, 
+                                   nrow = 2, 
+                                   rel_heights = c(.45, 1-.45))
+
+# Extract and arrange the confidence plots
+confidence_plots <- list(
+  Train = p3_list$Train$confidence,
+  Test = p3_list$Test$confidence
+)
+p_confidence <- cowplot::plot_grid(plotlist = confidence_plots, 
+                                  nrow = 2, 
+                                  rel_heights = c(.45, 1-.45))
+
+# Display both plots
+# print(p_categorical)
+# print(p_confidence)
+
+# Optionally save the plots for later merging
+ggsave(glue::glue("{FN}/{basename(FN)}__categorical.png"),
+       p_categorical,
+       width = 10, height = 8)
+ggsave(glue::glue("{FN}/{basename(FN)}__confidence.png"),
+       p_confidence,
+       width = 10, height = 8)
+
+
+export PREFIX=$(basename `pwd`)
+ convert ${PREFIX}__categorical.png -transparent '#d3d3d3' ${PREFIX}__categorical.trans.png
+ convert ${PREFIX}__confidence.png -transparent '#d3d3d3' ${PREFIX}__confidence.trans.png
+ composite -gravity center ${PREFIX}__confidence.trans.png ${PREFIX}__categorical.trans.png ${PREFIX}__catconf.png
+
+ 
+ 
+p3
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+
+
+
+```{r}
+p2 = list(Train = train_test_label_pred[1:2,],
+          Test =  train_test_label_pred[4:5,]
+     ) %>%
+  imap(function(x, nm){
+    browser()
+    # strip_width = train_test_label_pred[1, ] %>%
+    strip_width = x[1, ] %>%
+      {.[!is.na(.)]} %>% length %>% {./5} %>% ceiling()
+    
+    # browser()
+    # train_test_label_pred[1:2, ] %>%
+    xxx = x %>%
+      {.[, !is.na(.[1,])]} %>% 
+      reshape2::melt() %>% 
+      mutate(Var1 = factor(c("True", "Pred")[Var1])) %>% 
+      mutate(Var2 = as.numeric(str_remove(Var2, "V"))) %>% 
+      mutate(value = factor(llabels[as.character(value)])) %>% 
+      mutate(Strip = (Var2 - 1) %/% strip_width + 1) %>%
+      mutate(X_within_strip = (Var2 - 1) %% strip_width + 1) %>% 
+      mutate(highlight=F)
+    # browser()
+    
+    xxx %>% 
+    # Manually plot one of the matrix columns
+      # change to factor(highlight) below
+    #  group_by(Var2) %>% group_map(.keep=T, function(thisG, nm){
+    #   # browser()
+    #   if(all(thisG$value == c("Stress", "Meditation"))){
+    #     thisG$highlight = T
+    #   }
+    #   thisG
+    # }) %>% rbindlist() %T>%
+    #   {print(paste0(nm, " ", 100*sum(.$highlight)/nrow(.)))} %>% 
+    
+    
+    # browser()
+      
+      
+      
+      
+      
+      ggplot(aes(x = X_within_strip, y = Var1,
+                 fill = factor(value)
+                 # fill = factor(highlight)
+                 )) +  # Use X_within_strip
+      # geom_tile(color = "white") +  # Add white borders for better separation
+      geom_tile() +  # Add white borders for better separation
+      # geom_hline(yintercept = 1.5)+
+      geom_segment(aes(x = 0.5, xend = strip_width + 0.5, y = 1.5, yend = 1.5), color = "black", linewidth = .1, data=NULL) + # Add segment
+      facet_wrap(~Strip, ncol = 1) +  # Facet by strip
+      labs(title = glue::glue("{basename(FN)}\n{nm}: Time Series Strips"),
+           x = "",
+           y = "",
+           fill = "State") +
+      theme_minimal() +
+      theme(
+        # panel.spacing = unit(1, "lines"), # Add spacing between strips
+        axis.text.x = element_text(size = 8), # Adjust x-axis text size if needed
+        axis.text.y = element_text(size = 8),
+        strip.background = element_blank(), strip.text = element_blank(),
+        panel.grid = element_blank()  # Remove grid lines
+      )+
+      theme(legend.position = ifelse(nm == "Test", "bottom", "none"))
+  }) %>% cowplot::plot_grid(plotlist = ., nrow=2, rel_heights = c(.45, 1-.45))
+
+
+h_d_w = 4.18/9.72
+width = 500*4
+
+png(glue::glue("{FN}/{basename(FN)}__p2.png"),
+    width = width, height = width * h_d_w,
+    res=120)
+print(p2)
+dev.off()
+
+```
